@@ -1,0 +1,8 @@
+sam2_b.pt
+server/sam2_b.pt
+*.pt
+.env
+node_modules/
+dist/
+.vscode/
+.DS_Store
