@@ -130,7 +130,7 @@ function App() {
 
       <section className="panel" style={{ marginBottom: '2rem' }}>
         <h2>Cartella di salvataggio</h2>
-        <p>Le mask verranno salvate all'interno di questa root, suddivise per label.</p>
+        <p>Le mask verranno salvate all&apos;interno di questa root, suddivise per label.</p>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <input
             style={{ flex: '1 1 280px' }}
