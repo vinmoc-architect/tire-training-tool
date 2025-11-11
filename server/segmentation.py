@@ -117,15 +117,20 @@ def _segment_with_model(
 
     mask_tensor = results[0].masks.data[0]
     mask = mask_tensor.cpu().numpy() if hasattr(mask_tensor, "cpu") else np.asarray(mask_tensor)
-    mask = (mask > 0.5).astype(np.uint8) * 255
+    mask = (mask > 0.5).astype(np.uint8)  # 0/1
 
-    rgba_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
-    rgba_img[:, :, 3] = mask
+    # Usa direttamente l'immagine originale in BGR
+    masked = img.copy()
 
+    # Metti a nero tutto ciò che NON è nella maschera
+    masked[mask == 0] = [0, 0, 0]
+
+    # Crop sul bounding box della maschera
     x, y, w_box, h_box = cv2.boundingRect(mask)
-    cropped_rgba = rgba_img if w_box == 0 or h_box == 0 else rgba_img[y : y + h_box, x : x + w_box]
+    cropped = masked if w_box == 0 or h_box == 0 else masked[y : y + h_box, x : x + w_box]
 
-    success, buffer = cv2.imencode(".png", cropped_rgba)
+    # Encode PNG (OpenCV si aspetta BGR: siamo a posto)
+    success, buffer = cv2.imencode(".png", cropped)
     if not success:
         raise RuntimeError("Impossibile codificare l'immagine segmentata.")
 

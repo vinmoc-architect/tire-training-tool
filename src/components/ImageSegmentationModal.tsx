@@ -40,6 +40,11 @@ const transformImage = async (src: string, options: TransformOptions): Promise<s
   if (!ctx) {
     throw new Error('Canvas non supportato');
   }
+
+  // Imposta uno sfondo bianco per garantire che non ci sia trasparenza
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   ctx.save();
   ctx.translate(options.size / 2, options.size / 2);
   ctx.scale(options.flipH ? -1 : 1, options.flipV ? -1 : 1);
@@ -49,22 +54,6 @@ const transformImage = async (src: string, options: TransformOptions): Promise<s
   return canvas.toDataURL('image/png');
 };
 
-const composeWithMask = async (baseSrc: string, maskSrc: string): Promise<string> => {
-  const [baseImg, maskImg] = await Promise.all([loadImage(baseSrc), loadImage(maskSrc)]);
-  const canvas = document.createElement('canvas');
-  canvas.width = baseImg.width;
-  canvas.height = baseImg.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Canvas non supportato');
-  }
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(baseImg, 0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = 'destination-in';
-  ctx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = 'source-over';
-  return canvas.toDataURL('image/png');
-};
 
 type Mode = 'points' | 'boundary';
 
@@ -98,7 +87,6 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
   const [previewSrc, setPreviewSrc] = useState<string>(image.previewUrl);
   const [overrideFile, setOverrideFile] = useState<File | null>(null);
   const [maskPreviewLocal, setMaskPreviewLocal] = useState<string | null>(image.maskPreviewUrl ?? null);
-  const [finalMaskUrl, setFinalMaskUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [algorithm, setAlgorithm] = useState<SegmentAlgorithm>('sam2');
@@ -209,7 +197,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
     setIsApplyingGrayscale(false);
     setMaskPreviewLocal(image.maskPreviewUrl ?? null);
     setCurrentStep(initialStep ?? 'preprocess');
-  }, [image.id, initialStep, image.name, image.previewUrl, image.savedLabel]);
+  }, [image.id, initialStep, image.name, image.previewUrl, image.savedLabel, image.maskPreviewUrl]);
 
   useEffect(() => {
     if (image.maskPreviewUrl) {
@@ -444,6 +432,9 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
       if (!ctx) {
         throw new Error('Canvas non supportato');
       }
+      // Imposta uno sfondo bianco per garantire che non ci sia trasparenza
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, rect.x, rect.y, rect.width, rect.height, 0, 0, width, height);
       const dataUrl = canvas.toDataURL('image/png');
       const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
@@ -480,7 +471,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
       const message = cropError instanceof Error ? cropError.message : 'Errore durante il crop';
       setError(message);
     }
-  }, [cropCurrentPreview, cropRect, displaySrc, image.name]);
+  }, [cropCurrentPreview, cropRect, displaySrc, image.name, image.id]);
 
   const handleApplyNormalize = useCallback(async () => {
     if (!maskPreviewLocal) {
@@ -547,7 +538,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
     } finally {
       setIsApplyingGrayscale(false);
     }
-  }, [displaySrc, grayscaleMode, image.name]);
+  }, [displaySrc, grayscaleMode, image.name, image.id]);
 
   const handleSubmit = async () => {
     const payload: SegmentRequest = {
@@ -732,7 +723,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
         <div className="segmentation-modal__panel">
           {currentStep === 'preprocess' ? (
             <>
-              <p>Seleziona l'area da ritagliare sull'immagine. Trascina per disegnare un box.</p>
+              <p>Seleziona l&apos;area da ritagliare sull&apos;immagine. Trascina per disegnare un box.</p>
               <div className="segmentation-actions">
                 <button type="button" onClick={resetCropSelection}>
                   Reset crop
@@ -753,7 +744,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
             </>
           ) : currentStep === 'normalize' ? (
             <>
-              <p>Ridimensiona l'immagine segmentata e applica rotazioni o flip se necessario.</p>
+              <p>Ridimensiona l&apos;immagine segmentata e applica rotazioni o flip se necessario.</p>
               <label className="segmentation-field">
                 Dimensione finale
                 <select value={normalizeSize} onChange={(event) => setNormalizeSize(event.target.value as '224' | '320')}>

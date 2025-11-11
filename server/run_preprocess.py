@@ -14,16 +14,14 @@ def load_image(path: str) -> np.ndarray:
 
 
 def to_bgr(gray: np.ndarray, alpha: np.ndarray | None) -> np.ndarray:
-    if alpha is not None:
-        gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        return cv2.merge((*cv2.split(gray_rgb), alpha))
+    # Ignora il canale alpha e crea sempre un'immagine RGB
+    # Converti la scala di grigi in BGR (3 canali)
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
 
 def apply_processing(img: np.ndarray, mode: str) -> np.ndarray:
-    alpha = None
+    # Se l'immagine ha 4 canali (BGRA), prendi solo i primi 3 (BGR)
     if img.ndim == 3 and img.shape[2] == 4:
-        alpha = img[:, :, 3]
         bgr = img[:, :, :3]
     else:
         bgr = img
@@ -41,7 +39,7 @@ def apply_processing(img: np.ndarray, mode: str) -> np.ndarray:
         processed = cv2.GaussianBlur(gray, (5, 5), 0)
     else:
         raise ValueError(f'Modalità non supportata: {mode}')
-    return to_bgr(processed, alpha)
+    return to_bgr(processed, None)
 
 
 def main() -> None:
