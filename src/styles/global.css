@@ -221,6 +221,20 @@ select {
   -webkit-user-drag: none;
 }
 
+.segmentation-modal__stage-image,
+.segmentation-modal__stage-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.segmentation-modal__stage-mask {
+  pointer-events: none;
+  mix-blend-mode: normal;
+}
+
 .segmentation-modal__hint {
   position: absolute;
   bottom: 0.75rem;

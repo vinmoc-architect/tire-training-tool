@@ -85,6 +85,7 @@ Almeno uno tra `points` o `boundary` deve essere presente.
 - Il front-end invia la mask (data URL) all’endpoint `POST /api/save-mask`, che salva il PNG all’interno di `<root>/<LABEL>/`.
 - Nei metadati della card viene mostrato il percorso salvato per riferimento rapido.
 - Per il preprocessing è disponibile l’endpoint `POST /api/preprocess/grayscale` (body JSON `{ imageData, mode }`) con i filtri OpenCV `standard`, `clahe`, `adaptive`, `gaussian`; la response contiene la nuova data URL usata dagli step successivi del wizard.
+- Durante Review l’output finale salvato è l’immagine RGB (crop + eventuali filtri) mascherata dal battistrada: al di fuori della mask i pixel vengono azzerati, così ottieni direttamente la patch a colori pronta per gli step successivi.
 
 ### Debug suggerito
 - Dopo ogni step, la UI stampa in console (`console.debug`) messaggi `[wizard]` con lunghezza delle data URL e step corrente. Apri gli strumenti dev e controlla queste entry per assicurarti che lo step 3 stia usando l’output dello step 2.

@@ -24,6 +24,48 @@ const dataUrlToFile = (dataUrl: string, filename: string): File => {
   return new File([bytes], filename, { type: mime });
 };
 
+type TransformOptions = {
+  size: number;
+  rotation: number;
+  flipH: boolean;
+  flipV: boolean;
+};
+
+const transformImage = async (src: string, options: TransformOptions): Promise<string> => {
+  const img = await loadImage(src);
+  const canvas = document.createElement('canvas');
+  canvas.width = options.size;
+  canvas.height = options.size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Canvas non supportato');
+  }
+  ctx.save();
+  ctx.translate(options.size / 2, options.size / 2);
+  ctx.scale(options.flipH ? -1 : 1, options.flipV ? -1 : 1);
+  ctx.rotate((options.rotation * Math.PI) / 180);
+  ctx.drawImage(img, -options.size / 2, -options.size / 2, options.size, options.size);
+  ctx.restore();
+  return canvas.toDataURL('image/png');
+};
+
+const composeWithMask = async (baseSrc: string, maskSrc: string): Promise<string> => {
+  const [baseImg, maskImg] = await Promise.all([loadImage(baseSrc), loadImage(maskSrc)]);
+  const canvas = document.createElement('canvas');
+  canvas.width = baseImg.width;
+  canvas.height = baseImg.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Canvas non supportato');
+  }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(baseImg, 0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'destination-in';
+  ctx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = 'source-over';
+  return canvas.toDataURL('image/png');
+};
+
 type Mode = 'points' | 'boundary';
 
 type BoundaryPoint = { x: number; y: number };
@@ -89,10 +131,8 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
     stageWidth: number;
     stageHeight: number;
   } | null>(null);
-  const displaySrc =
-    currentStep === 'normalize' || currentStep === 'grayscale' || currentStep === 'review'
-      ? maskPreviewLocal ?? image.maskPreviewUrl ?? previewSrc ?? image.previewUrl
-      : previewSrc || image.previewUrl;
+  const displaySrc = previewSrc || image.previewUrl;
+  const maskOverlaySrc = maskPreviewLocal ?? image.maskPreviewUrl ?? null;
 
   useEffect(() => {
     console.log('[wizard] state snapshot', {
@@ -150,7 +190,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
     setError(null);
     setAlgorithm('sam2');
     setModelSize('base');
-      setPreviewSrc(image.maskPreviewUrl ?? image.previewUrl);
+    setPreviewSrc(image.previewUrl);
     setOverrideFile(null);
     setCropRect(null);
     setDraftCrop(null);
@@ -443,42 +483,32 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
   }, [cropCurrentPreview, cropRect, displaySrc, image.name]);
 
   const handleApplyNormalize = useCallback(async () => {
-    const source = maskPreviewLocal ?? image.maskPreviewUrl;
-    if (!source) {
-      setNormalizeError('Esegui prima la segmentazione.');
+    if (!maskPreviewLocal) {
+      setNormalizeError('Completa la segmentazione prima di normalizzare.');
       setCurrentStep('annotate');
       return;
     }
     try {
       setIsNormalizing(true);
       setNormalizeError(null);
-      const img = await loadImage(source);
-      const target = Number(normalizeSize);
-      const canvas = document.createElement('canvas');
-      canvas.width = target;
-      canvas.height = target;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('Canvas non supportato');
-      }
-      ctx.save();
-      ctx.translate(target / 2, target / 2);
-      ctx.scale(normalizeFlipH ? -1 : 1, normalizeFlipV ? -1 : 1);
-      ctx.rotate((normalizeRotation * Math.PI) / 180);
-      ctx.drawImage(img, -target / 2, -target / 2, target, target);
-      ctx.restore();
-      const dataUrl = canvas.toDataURL('image/png');
-      setMaskPreviewLocal(dataUrl);
-      setPreviewSrc(dataUrl);
-      setNormalizeError(null);
-      setCurrentStep('normalize');
-      console.log('[wizard] normalize applied', {
-        imageId: image.id,
-        target,
+      const options: TransformOptions = {
+        size: Number(normalizeSize),
         rotation: normalizeRotation,
         flipH: normalizeFlipH,
-        flipV: normalizeFlipV,
-        maskLen: dataUrl.length
+        flipV: normalizeFlipV
+      };
+      const [normalizedBase, normalizedMask] = await Promise.all([
+        transformImage(previewSrc, options),
+        transformImage(maskPreviewLocal, options)
+      ]);
+      setPreviewSrc(normalizedBase);
+      setMaskPreviewLocal(normalizedMask);
+      setCurrentStep('grayscale');
+      console.log('[wizard] normalize applied', {
+        imageId: image.id,
+        ...options,
+        baseLen: normalizedBase.length,
+        maskLen: normalizedMask.length
       });
     } catch (normalizeErr) {
       const message = normalizeErr instanceof Error ? normalizeErr.message : 'Errore durante la normalizzazione';
@@ -486,7 +516,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
     } finally {
       setIsNormalizing(false);
     }
-  }, [image.id, image.maskPreviewUrl, maskPreviewLocal, normalizeFlipH, normalizeFlipV, normalizeRotation, normalizeSize]);
+  }, [image.id, maskPreviewLocal, normalizeFlipH, normalizeFlipV, normalizeRotation, normalizeSize, previewSrc]);
 
   const handleApplyGrayscale = useCallback(async () => {
     if (!displaySrc) {
@@ -583,8 +613,8 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
   };
 
   const goToStep = (step: WizardStep) => {
-    const hasMask = maskPreviewLocal ?? image.maskPreviewUrl;
-    if ((step === 'normalize' || step === 'grayscale' || step === 'review') && !hasMask) {
+    // Normalizza e step successivi richiedono una mask (maskPreviewLocal)
+    if ((step === 'normalize' || step === 'grayscale' || step === 'review') && !maskPreviewLocal) {
       setError('Completa la segmentazione prima di passare allo step successivo');
       return;
     }
@@ -659,6 +689,7 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
           onMouseLeave={currentStep === 'preprocess' ? handleCropMouseUp : undefined}
         >
           <img
+            className="segmentation-modal__stage-image"
             src={displaySrc}
             alt={image.name}
             draggable={false}
@@ -670,6 +701,9 @@ export function ImageSegmentationModal({ image, initialStep, rootDir, onClose, o
               })
             }
           />
+          {maskOverlaySrc && (
+            <img className="segmentation-modal__stage-mask" src={maskOverlaySrc} alt="Mask overlay" />
+          )}
           {currentStep === 'annotate' && annotationPreview}
           {currentStep === 'preprocess' && cropOverlay && (
             <span
