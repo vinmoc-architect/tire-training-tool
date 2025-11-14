@@ -1,6 +1,7 @@
 import argparse
 import base64
 from pathlib import Path
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -13,7 +14,7 @@ def load_image(path: str) -> np.ndarray:
     return img
 
 
-def to_bgr(gray: np.ndarray, alpha: np.ndarray | None) -> np.ndarray:
+def to_bgr(gray: np.ndarray, alpha: Optional[np.ndarray]) -> np.ndarray:
     # Ignora il canale alpha e crea sempre un'immagine RGB
     # Converti la scala di grigi in BGR (3 canali)
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
