@@ -2,11 +2,12 @@ import argparse
 import base64
 import json
 from pathlib import Path
+from typing import Optional
 
 from segmentation import segment_image, segment_image_sam2
 
 
-def decode_json_b64(value: str | None):
+def decode_json_b64(value: Optional[str]):
     if not value:
         return None
     data = base64.b64decode(value.encode("utf-8")).decode("utf-8")
